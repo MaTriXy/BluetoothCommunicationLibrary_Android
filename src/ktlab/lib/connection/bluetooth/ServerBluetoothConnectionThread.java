@@ -14,6 +14,7 @@ public class ServerBluetoothConnectionThread extends BluetoothConnectionThread {
     private static final String SERVICE_NAME = "KTLab_Library";
 
     private BluetoothAdapter mBluetoothAdapter;
+    private BluetoothServerSocket mServerSocket;
 
     public ServerBluetoothConnectionThread(Message msg) {
         super(msg);
@@ -21,8 +22,6 @@ public class ServerBluetoothConnectionThread extends BluetoothConnectionThread {
     }
 
     protected void getSocket() {
-
-        BluetoothServerSocket mServerSocket;
 
         // create server socket
         try {
@@ -47,5 +46,16 @@ public class ServerBluetoothConnectionThread extends BluetoothConnectionThread {
         } catch (IOException e) {
             Log.e(TAG, "failed to close ServerSocket");
         }
+    }
+
+    @Override
+    public boolean close(){
+        if (mServerSocket != null){
+            try {
+                mServerSocket.close();
+            } catch (IOException e) {
+            }
+        }
+        return super.close();
     }
 }
