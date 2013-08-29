@@ -50,7 +50,7 @@ public class CommandReceiveThread extends Thread {
             }
         }
 
-        int optionLen = ByteBuffer.wrap(rawHeader).order(mOrder).getInt(1);
+        int optionLen = ByteBuffer.wrap(rawHeader).order(mOrder).get(5);
 
         byte[] rawOption = new byte[optionLen];
         receivedSize = 0;

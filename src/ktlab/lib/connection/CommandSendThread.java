@@ -14,7 +14,7 @@ public class CommandSendThread extends Thread {
     private ByteOrder mOrder;
 
     public CommandSendThread(OutputStream out, ConnectionCommand command,
-            Message msg, ByteOrder order) {
+                             Message msg, ByteOrder order) {
         mOut = out;
         mCommand = command;
         mMessage = msg;
@@ -26,6 +26,7 @@ public class CommandSendThread extends Thread {
         try {
             mOut.write(ConnectionCommand.toByteArray(mCommand, mOrder));
         } catch (IOException e) {
+            e.printStackTrace();
             mMessage.what = Connection.EVENT_CONNECTION_FAIL;
         }
 

@@ -6,7 +6,8 @@ import java.nio.ByteOrder;
 public class ConnectionCommand {
 
     // Header (type + optionLen) length
-    public static final int HEADER_LENGTH = Integer.SIZE / Byte.SIZE + 1;
+    public static final int HEADER_LENGTH = Integer.SIZE / Byte.SIZE + 2;
+    public static final char[] BABOLAT_HEADER = {0x55, 0xAA, 0x55, 0xAA};
 
     // Command fields
     public byte type;
@@ -54,14 +55,25 @@ public class ConnectionCommand {
      * @hide
      */
     protected static byte[] toByteArray(ConnectionCommand command, ByteOrder order) {
-        byte[] ret = new byte[command.optionLen + HEADER_LENGTH];
-        // set byte order
+        final byte[] header = stringToBytesASCII(BABOLAT_HEADER);
+        byte[] ret = new byte[command.optionLen + header.length + 3];
+
         ByteBuffer bf = ByteBuffer.wrap(ret).order(order);
+        bf.put(header);
         bf.put(command.type);
-        bf.putInt(command.optionLen);
-        bf.put(command.option);
+        bf.put((byte)command.optionLen);
+        if(command.optionLen > 0)
+            bf.put(command.option);
 
         return ret;
+    }
+
+    public static byte[] stringToBytesASCII(char[] str) {
+        byte[] b = new byte[str.length];
+        for (int i = 0; i < str.length; i++) {
+            b[i] = (byte) str[i];
+        }
+        return b;
     }
 
     /**
@@ -76,8 +88,8 @@ public class ConnectionCommand {
      */
     protected static ConnectionCommand fromByteArray(byte[] data, ByteOrder order) {
         ByteBuffer bf = ByteBuffer.wrap(data).order(order);
-        byte type = bf.get();
-        int len = bf.getInt();
+        byte type = bf.get(4);
+        int len = bf.get(5);
         byte[] option = new byte[len];
         bf.get(option);
 
@@ -95,7 +107,7 @@ public class ConnectionCommand {
      * @hide
      */
     protected static ConnectionCommand fromHeaderAndOption(byte[] header, byte[] option,
-            ByteOrder order) {
+                                                           ByteOrder order) {
         byte[] data = new byte[header.length + option.length];
 
         System.arraycopy(header, 0, data, 0, header.length);
