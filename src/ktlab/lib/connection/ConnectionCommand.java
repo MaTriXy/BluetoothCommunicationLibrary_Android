@@ -6,8 +6,12 @@ import java.nio.ByteOrder;
 public class ConnectionCommand {
 
     // Header (type + optionLen) length
-    public static final int HEADER_LENGTH = Integer.SIZE / Byte.SIZE + 2;
+    public static final int HEADER_LENGTH = 6;
     public static final char[] BABOLAT_HEADER = {0x55, 0xAA, 0x55, 0xAA};
+    public static final int ACK_REPONSE_SIZE = HEADER_LENGTH + 1;
+    public static final int HEADER_DATA_SIZE_INDEX = 5;
+    public static final int HEADER_COMMAND_INDEX = 4;
+    public static final int HEADER_ACK_INDEX = 6;
 
     // Command fields
     public byte type;
@@ -68,6 +72,7 @@ public class ConnectionCommand {
         return ret;
     }
 
+
     public static byte[] stringToBytesASCII(char[] str) {
         byte[] b = new byte[str.length];
         for (int i = 0; i < str.length; i++) {
@@ -88,8 +93,8 @@ public class ConnectionCommand {
      */
     protected static ConnectionCommand fromByteArray(byte[] data, ByteOrder order) {
         ByteBuffer bf = ByteBuffer.wrap(data).order(order);
-        byte type = bf.get(4);
-        int len = bf.get(5);
+        byte type = bf.get(ConnectionCommand.HEADER_COMMAND_INDEX);
+        int len = bf.get(ConnectionCommand.HEADER_DATA_SIZE_INDEX);
         byte[] option = new byte[len];
         bf.get(option);
 
@@ -108,11 +113,14 @@ public class ConnectionCommand {
      */
     protected static ConnectionCommand fromHeaderAndOption(byte[] header, byte[] option,
                                                            ByteOrder order) {
-        byte[] data = new byte[header.length + option.length];
+//        byte[] data = new byte[header.length + option.length];
+//
+//        System.arraycopy(header, 0, data, 0, header.length);
+//        System.arraycopy(option, 0, data, header.length, option.length);
 
-        System.arraycopy(header, 0, data, 0, header.length);
-        System.arraycopy(option, 0, data, header.length, option.length);
-
-        return fromByteArray(data, order);
+        ByteBuffer bf = ByteBuffer.wrap(header).order(order);
+        byte type = bf.get(ConnectionCommand.HEADER_COMMAND_INDEX);
+        return new ConnectionCommand(type, option);
+//        return fromByteArray(data, order);
     }
 }

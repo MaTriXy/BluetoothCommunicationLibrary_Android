@@ -17,6 +17,7 @@ public abstract class Connection extends Handler {
     public static final int EVENT_CONNECT_COMPLETE      = 1;
     public static final int EVENT_DATA_RECEIVED         = 2;
     public static final int EVENT_DATA_SEND_COMPLETE    = 3;
+    public static final int EVENT_UNKNOWN_COMMAND       = 4;
     public static final int EVENT_CONNECTION_FAIL       = 101;
 
     protected ConnectionCallback mCallback;
@@ -71,7 +72,9 @@ public abstract class Connection extends Handler {
                     mOrder);
             mReceiveThread.start();
             break;
-
+        case EVENT_UNKNOWN_COMMAND:
+            //TODO sen error message when receive nack
+            break;
         case EVENT_DATA_SEND_COMPLETE:
             int id = msg.arg1;
             Log.i(TAG, "data send complete, id : " + id);
@@ -196,8 +199,6 @@ public abstract class Connection extends Handler {
      *
      * @param type
      *            command type
-     * @param data
-     *            option data
      * @param id
      *            send id
      * @return return true if success sending or queueing data. if "canQueueing"
