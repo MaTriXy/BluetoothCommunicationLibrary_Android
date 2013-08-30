@@ -23,10 +23,14 @@ public class CommandSendThread extends Thread {
 
     @Override
     public void run() {
-        try {
-            mOut.write(ConnectionCommand.toByteArray(mCommand, mOrder));
-        } catch (IOException e) {
-            e.printStackTrace();
+        if(mOut != null) {
+            try {
+                mOut.write(ConnectionCommand.toByteArray(mCommand, mOrder));
+            } catch (IOException e) {
+                e.printStackTrace();
+                mMessage.what = Connection.EVENT_CONNECTION_FAIL;
+            }
+        } else {
             mMessage.what = Connection.EVENT_CONNECTION_FAIL;
         }
 
