@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 import android.os.Message;
+import android.util.Log;
 
 public class CommandReceiveThread extends Thread {
 
@@ -116,6 +117,7 @@ public class CommandReceiveThread extends Thread {
                 }
             }
         }
+
         final byte ack = ByteBuffer.wrap(rawHeader).order(mOrder).get(ConnectionCommand.HEADER_ACK_INDEX);
         if(ack == 0) {
             //FIXME send error command when receive noack;

@@ -1,5 +1,7 @@
 package ktlab.lib.connection;
 
+import android.util.Log;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -60,7 +62,7 @@ public class ConnectionCommand {
      */
     protected static byte[] toByteArray(ConnectionCommand command, ByteOrder order) {
         final byte[] header = stringToBytesASCII(BABOLAT_HEADER);
-        byte[] ret = new byte[command.optionLen + header.length + 3];
+        byte[] ret = new byte[command.optionLen + HEADER_LENGTH];
 
         ByteBuffer bf = ByteBuffer.wrap(ret).order(order);
         bf.put(header);
@@ -70,6 +72,26 @@ public class ConnectionCommand {
             bf.put(command.option);
 
         return ret;
+    }
+
+    public static String getPrintableBytesArray(final byte[] data) {
+        if(data == null || data.length == 0)
+            return "[empty]";
+
+        final StringBuilder builder = new StringBuilder();
+        for(int i = 0; i < data.length; i++) {
+            if(i == 0) {
+                builder.append('[');
+                builder.append(data[i]);
+            } else {
+                builder.append(',');
+                builder.append(data[i]);
+            }
+            if(i == (data.length - 1)) {
+                builder.append(']');
+            }
+        }
+        return  builder.toString();
     }
 
 

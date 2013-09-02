@@ -62,8 +62,8 @@ public abstract class Connection extends Handler {
             break;
 
         case EVENT_DATA_RECEIVED:
-            Log.i(TAG, "data received");
             ConnectionCommand cmd = (ConnectionCommand) msg.obj;
+            Log.i(TAG, "data received, id : " +  cmd.type);
             mCallback.onCommandReceived(cmd);
 
             // receive thread starting
