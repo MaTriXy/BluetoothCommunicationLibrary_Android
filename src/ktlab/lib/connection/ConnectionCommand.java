@@ -7,39 +7,39 @@ import java.nio.ByteOrder;
 
 public class ConnectionCommand {
 
+    private final static String LOG_KEY = "ConnectionCommand";
     // Header (type + optionLen) length
     public static final int HEADER_LENGTH = 6;
     public static final char[] BABOLAT_HEADER = {0x55, 0xAA, 0x55, 0xAA};
     public static final int ACK_REPONSE_SIZE = HEADER_LENGTH + 1;
     public static final int HEADER_DATA_SIZE_INDEX = 5;
     public static final int HEADER_COMMAND_INDEX = 4;
-    public static final int HEADER_ACK_INDEX = 6;
+    public static final int HEADER_ACK_INDEX = 0;
 
     // Command fields
     public byte type;
     public int optionLen;
     public byte[] option;
+    public byte[] allowed;
 
     /**
      * Constructor Create BTCommand without option.
      *
-     * @param type
-     *            Commands type
+     * @param type Commands type
      */
     public ConnectionCommand(byte type) {
-        this(type, null);
+        this(type, null, new byte[0]);
     }
 
     /**
      * Constructor Create BTCommand with option.
      *
-     * @param type
-     *            Commands type
-     * @param option
-     *            Commands option
+     * @param type   Commands type
+     * @param option Commands option
      */
-    public ConnectionCommand(byte type, byte[] option) {
+    public ConnectionCommand(byte type, byte[] option, byte[] allow) {
         this.type = type;
+        this.allowed = allow;
         if (option != null) {
             optionLen = option.length;
             this.option = new byte[option.length];
@@ -53,10 +53,8 @@ public class ConnectionCommand {
     /**
      * Convert BTCommand to byte array
      *
-     * @param command
-     *            target command
-     * @param order
-     *            byte order
+     * @param command target command
+     * @param order   byte order
      * @return byte array
      * @hide
      */
@@ -67,31 +65,37 @@ public class ConnectionCommand {
         ByteBuffer bf = ByteBuffer.wrap(ret).order(order);
         bf.put(header);
         bf.put(command.type);
-        bf.put((byte)command.optionLen);
-        if(command.optionLen > 0)
+        bf.put((byte) command.optionLen);
+        if (command.optionLen > 0)
             bf.put(command.option);
+
+        Log.v(LOG_KEY, "SEND DATA " + getPrintableBytesArray(ret));
 
         return ret;
     }
 
+    public static byte[] getHeader() {
+        return stringToBytesASCII(BABOLAT_HEADER);
+    }
+
     public static String getPrintableBytesArray(final byte[] data) {
-        if(data == null || data.length == 0)
+        if (data == null || data.length == 0)
             return "[empty]";
 
         final StringBuilder builder = new StringBuilder();
-        for(int i = 0; i < data.length; i++) {
-            if(i == 0) {
+        for (int i = 0; i < data.length; i++) {
+            if (i == 0) {
                 builder.append('[');
                 builder.append(data[i]);
             } else {
                 builder.append(',');
                 builder.append(data[i]);
             }
-            if(i == (data.length - 1)) {
+            if (i == (data.length - 1)) {
                 builder.append(']');
             }
         }
-        return  builder.toString();
+        return builder.toString();
     }
 
 
@@ -106,10 +110,8 @@ public class ConnectionCommand {
     /**
      * Convert byte array to BTCommand
      *
-     * @param data
-     *            byte array
-     * @param order
-     *            Byte order
+     * @param data  byte array
+     * @param order Byte order
      * @return BTCommand
      * @hide
      */
@@ -120,16 +122,14 @@ public class ConnectionCommand {
         byte[] option = new byte[len];
         bf.get(option);
 
-        return new ConnectionCommand(type, option);
+        return new ConnectionCommand(type, option, null);
     }
 
     /**
      * create BTCommand from Header and Option
      *
-     * @param header
-     *            header(byte array)
-     * @param option
-     *            option(byte array)
+     * @param header header(byte array)
+     * @param option option(byte array)
      * @return BTCommand
      * @hide
      */
@@ -142,7 +142,7 @@ public class ConnectionCommand {
 
         ByteBuffer bf = ByteBuffer.wrap(header).order(order);
         byte type = bf.get(ConnectionCommand.HEADER_COMMAND_INDEX);
-        return new ConnectionCommand(type, option);
+        return new ConnectionCommand(type, option, null);
 //        return fromByteArray(data, order);
     }
 }

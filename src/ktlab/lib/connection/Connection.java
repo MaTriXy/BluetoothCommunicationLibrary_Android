@@ -13,6 +13,11 @@ public abstract class Connection extends Handler {
 
     private static final String TAG = "Connection";
 
+    public enum  CONNECTION_STATE {
+        IDLE,
+        WAITING_ANSWER,
+    }
+
     // Event
     public static final int EVENT_CONNECT_COMPLETE      = 1;
     public static final int EVENT_DATA_RECEIVED         = 2;
@@ -36,6 +41,8 @@ public abstract class Connection extends Handler {
     protected boolean forceStop = false;
 
     // send data queue
+    protected ConnectionCommand mCurrentCommand;
+    protected CONNECTION_STATE mState = CONNECTION_STATE.IDLE;
     protected final boolean canQueueing;
     protected LinkedList<PendingData> mQueue = null;
     private final ByteOrder mOrder;
@@ -63,7 +70,7 @@ public abstract class Connection extends Handler {
 
         case EVENT_DATA_RECEIVED:
             ConnectionCommand cmd = (ConnectionCommand) msg.obj;
-            Log.i(TAG, "data received, id : " +  cmd.type);
+//            Log.i(TAG, "data received, id : " +  cmd.type);
             mCallback.onCommandReceived(cmd);
 
             // receive thread starting
@@ -77,13 +84,19 @@ public abstract class Connection extends Handler {
             break;
         case EVENT_DATA_SEND_COMPLETE:
             int id = msg.arg1;
-            Log.i(TAG, "data send complete, id : " + id);
+//            Log.i(TAG, "data send complete, id : " + id);
             mSendThread = null;
             isSending = false;
             mCallback.onDataSendComplete(id);
 
+            ConnectionCommand command = (ConnectionCommand) msg.obj;
+
+            if(isLastAllowed(command.type)) {
+                mState = CONNECTION_STATE.IDLE;
+            }
+
             // if queueing data exists, send first data
-            if (canQueueing) {
+            if (mState == CONNECTION_STATE.IDLE) {
                 sendPendingData();
             }
             break;
@@ -158,6 +171,32 @@ public abstract class Connection extends Handler {
         mOutput = null;
     }
 
+    private boolean isAllowed(final byte type) {
+        byte[] allowed = null;
+        if(mCurrentCommand != null)
+            allowed = mCurrentCommand.allowed;
+        if(allowed == null || allowed.length == 0)
+            return false;
+        for(int i = 0; i < allowed.length; i++) {
+            if(allowed[i] == type) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isLastAllowed(final byte type) {
+        byte[] allowed = null;
+        if(mCurrentCommand != null)
+            allowed = mCurrentCommand.allowed;
+        if(allowed == null || allowed.length == 0)
+            return true;
+        if(allowed[allowed.length - 1] == type) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      *
      * @param type
@@ -169,13 +208,13 @@ public abstract class Connection extends Handler {
      * @return return true if success sending or queueing data. if "canQueueing"
      *         is false and sending any data, return false.
      */
-    public boolean sendData(byte type, byte[] data, int id) {
+    public boolean sendData(byte type, byte[] data, int id, byte[] allowed) {
 
         // if sending data, queueing...
-        if (isSending) {
+        if (mState == CONNECTION_STATE.WAITING_ANSWER && !isAllowed(type)) {
             if (canQueueing) {
                 synchronized (mQueue) {
-                    PendingData p = new PendingData(id, new ConnectionCommand(type, data));
+                    PendingData p = new PendingData(id, new ConnectionCommand(type, data, allowed));
                     mQueue.offer(p);
                 }
                 Log.i(TAG, "sendData(), pending...");
@@ -187,10 +226,16 @@ public abstract class Connection extends Handler {
 
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = id;
-        ConnectionCommand command = new ConnectionCommand(type, data);
+        ConnectionCommand command = new ConnectionCommand(type, data, allowed);
+        msg.obj = command;
+
+        if(mState == CONNECTION_STATE.IDLE) {
+            mCurrentCommand = command;
+            mState = CONNECTION_STATE.WAITING_ANSWER;
+        }
+
         mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
         mSendThread.start();
-
         isSending = true;
         return true;
     }
@@ -243,6 +288,11 @@ public abstract class Connection extends Handler {
         Log.i(TAG, "send PendingData");
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = pendingData.id;
+        msg.obj = pendingData.command;
+
+
+        mCurrentCommand = pendingData.command;
+        mState = CONNECTION_STATE.WAITING_ANSWER;
 
         mSendThread = new CommandSendThread(mOutput, pendingData.command, msg, mOrder);
         mSendThread.start();

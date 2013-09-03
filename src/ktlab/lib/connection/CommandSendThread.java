@@ -21,6 +21,10 @@ public class CommandSendThread extends Thread {
         mOrder = order;
     }
 
+    public ConnectionCommand getCommand() {
+        return mCommand;
+    }
+
     @Override
     public void run() {
         if(mOut != null) {

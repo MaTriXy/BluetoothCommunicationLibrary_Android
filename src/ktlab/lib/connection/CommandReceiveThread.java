@@ -10,6 +10,7 @@ import android.util.Log;
 
 public class CommandReceiveThread extends Thread {
 
+    private final static String LOG_TAG = "CommandReceiveThread";
     private boolean forceStop = false;
 
     private final InputStream mInput;
@@ -23,22 +24,7 @@ public class CommandReceiveThread extends Thread {
     }
 
 
-
-    public void run() {
-
-        boolean isAck = false;
-
-        try {
-            isAck = checkAck();
-        } catch (IOException e) {
-            mMessage.what = Connection.EVENT_CONNECTION_FAIL;
-            mMessage.sendToTarget();
-            return;
-        }
-
-        //Command failed
-        if(!isAck)
-            return;
+    public boolean manageRead(boolean readAck) {
 
         byte[] rawHeader = new byte[ConnectionCommand.HEADER_LENGTH];
         int receivedSize = 0;
@@ -52,10 +38,15 @@ public class CommandReceiveThread extends Thread {
             } catch (IOException e) {
                 mMessage.what = Connection.EVENT_CONNECTION_FAIL;
                 mMessage.sendToTarget();
-                return;
+                return false;
             }
             if (length != -1) {
                 receivedSize += length;
+                if (!checkHeader(rawHeader, receivedSize)) {
+                    Log.v(LOG_TAG, "BAD HEADER: " + ConnectionCommand.getPrintableBytesArray(rawHeader));
+                    receivedSize = 0;
+                    continue;
+                }
             }
 
             if (length == 0) {
@@ -67,7 +58,15 @@ public class CommandReceiveThread extends Thread {
             }
         }
 
-        int optionLen = ByteBuffer.wrap(rawHeader).order(mOrder).get(ConnectionCommand.HEADER_DATA_SIZE_INDEX);
+        byte[] orderedHeader = new byte[rawHeader.length];
+        ByteBuffer.wrap(rawHeader).order(mOrder).get(orderedHeader);
+
+        final int optionLen = orderedHeader[ConnectionCommand.HEADER_DATA_SIZE_INDEX];
+        final int commandId = orderedHeader[ConnectionCommand.HEADER_COMMAND_INDEX];
+
+        // si la command est 5 alors il n'y pas de ACK
+        if (commandId == 5)
+            readAck = false;
 
         byte[] rawOption = new byte[optionLen];
         receivedSize = 0;
@@ -82,7 +81,7 @@ public class CommandReceiveThread extends Thread {
             } catch (IOException e) {
                 mMessage.what = Connection.EVENT_CONNECTION_FAIL;
                 mMessage.sendToTarget();
-                return;
+                return false;
             }
             if (length != -1) {
                 receivedSize += length;
@@ -92,38 +91,41 @@ public class CommandReceiveThread extends Thread {
         byte[] orderedOption = new byte[rawOption.length];
         ByteBuffer.wrap(rawOption).order(mOrder).get(orderedOption);
 
-        ConnectionCommand command = ConnectionCommand.fromHeaderAndOption(
-                rawHeader, rawOption, mOrder);
-        mMessage.obj = command;
-        mMessage.sendToTarget();
+        // si on il y a un ACK
+        if (readAck) {
+            Log.v(LOG_TAG, "ACK RECEIVED " + ConnectionCommand.getPrintableBytesArray(rawHeader) + ConnectionCommand.getPrintableBytesArray(rawOption));
+            final byte ack = orderedOption[ConnectionCommand.HEADER_ACK_INDEX];
+            if (!(ack == 1)) {
+                //TODO RECEIVE NO ACK
+                return false;
+            }
+            return true;
+        } else {
+            // data received
+            Log.v(LOG_TAG, "DATA RECEIVED " + ConnectionCommand.getPrintableBytesArray(rawHeader));
+            ConnectionCommand command = ConnectionCommand.fromHeaderAndOption(
+                    rawHeader, rawOption, mOrder);
+            mMessage.obj = command;
+            mMessage.sendToTarget();
+        }
+        return false;
     }
 
-    private  boolean checkAck() throws IOException {
-        byte[] rawHeader = new byte[ConnectionCommand.ACK_REPONSE_SIZE];
-        int receivedSize = 0;
 
-        while (!forceStop && (receivedSize < ConnectionCommand.ACK_REPONSE_SIZE)) {
-            int length = 0;
-                length = mInput.read(rawHeader, receivedSize,
-                        ConnectionCommand.ACK_REPONSE_SIZE - receivedSize);
-            if (length != -1) {
-                receivedSize += length;
-            }
-            if (length == 0) {
-                try {
-                    sleep(50);
-                } catch (InterruptedException e) {
-                    // DO NOTHING
-                }
-            }
+    public void run() {
+
+        if (manageRead(true))
+            manageRead(false);
+
+    }
+
+    private boolean checkHeader(final byte[] data, final int len) {
+        final byte[] header = ConnectionCommand.getHeader();
+        final int size = len > header.length ? header.length : len;
+        for (int i = 0; i < size; i++) {
+            if (data[i] != header[i])
+                return false;
         }
-
-        final byte ack = ByteBuffer.wrap(rawHeader).order(mOrder).get(ConnectionCommand.HEADER_ACK_INDEX);
-        if(ack == 0) {
-            //FIXME send error command when receive noack;
-            return false;
-        }
-
         return true;
     }
 
