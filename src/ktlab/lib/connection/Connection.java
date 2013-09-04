@@ -70,8 +70,7 @@ public abstract class Connection extends Handler {
 
         case EVENT_DATA_RECEIVED:
             ConnectionCommand cmd = (ConnectionCommand) msg.obj;
-//            Log.i(TAG, "data received, id : " +  cmd.type);
-            mCallback.onCommandReceived(cmd);
+            mCallback.onCommandReceived(mCurrentCommand.id, cmd);
 
             // receive thread starting
             mReceiveThread = null;
@@ -214,7 +213,7 @@ public abstract class Connection extends Handler {
         if (mState == CONNECTION_STATE.WAITING_ANSWER && !isAllowed(type)) {
             if (canQueueing) {
                 synchronized (mQueue) {
-                    PendingData p = new PendingData(id, new ConnectionCommand(type, data, allowed));
+                    PendingData p = new PendingData(id, new ConnectionCommand(type, data, allowed, id));
                     mQueue.offer(p);
                 }
                 Log.i(TAG, "sendData(), pending...");
@@ -226,7 +225,7 @@ public abstract class Connection extends Handler {
 
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = id;
-        ConnectionCommand command = new ConnectionCommand(type, data, allowed);
+        ConnectionCommand command = new ConnectionCommand(type, data, allowed, id);
         msg.obj = command;
 
         if(mState == CONNECTION_STATE.IDLE) {

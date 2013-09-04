@@ -21,6 +21,7 @@ public class ConnectionCommand {
     public int optionLen;
     public byte[] option;
     public byte[] allowed;
+    public int id;
 
     /**
      * Constructor Create BTCommand without option.
@@ -38,7 +39,12 @@ public class ConnectionCommand {
      * @param option Commands option
      */
     public ConnectionCommand(byte type, byte[] option, byte[] allow) {
+        this(type, option, allow, -1);
+    }
+
+    public ConnectionCommand(byte type, byte[] option, byte[] allow, int commandId) {
         this.type = type;
+        this.id = commandId;
         this.allowed = allow;
         if (option != null) {
             optionLen = option.length;

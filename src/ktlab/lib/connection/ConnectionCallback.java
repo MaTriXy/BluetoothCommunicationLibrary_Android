@@ -5,5 +5,5 @@ public interface ConnectionCallback {
 	public void onConnectComplete();
 	public void onConnectionFailed();
 	public void onDataSendComplete(int id);
-	public void onCommandReceived(ConnectionCommand command);
+	public void onCommandReceived(int rootCommand, ConnectionCommand command);
 }
