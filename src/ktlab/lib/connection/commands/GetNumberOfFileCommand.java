@@ -30,36 +30,18 @@ public class GetNumberOfFileCommand extends CommandReceiveThread {
             return;
         }
 
-        // start_send_file_command
-        final ConnectionCommand startSendFileCommand = readCommand();
-        if(startSendFileCommand == null) {
+        // number_of_log
+        final ConnectionCommand nblog = readCommand();
+        if(nblog == null) {
             this.forceStop = true;
             return;
         }
 
         // send start_send_file ack
-        mMessageSend.obj = startSendFileCommand;
+        mMessageSend.obj = nblog;
         mMessageSend.sendToTarget();
 
-        // file_data
-        final ConnectionCommand fileDataCommand = readCommand();
-        if(fileDataCommand == null) {
-            this.forceStop = true;
-            return;
-        }
-
-        // send file_data ack
-//        mMessageSend.obj = fileDataCommand;
-//        mMessageSend.sendToTarget();
-
-        Message msg = Message.obtain();
-        msg.setTarget(handler);
-        msg.obj = fileDataCommand;
-        msg.what = Connection.EVENT_SEND_ACK;
-        msg.sendToTarget();
-
-        mMessage.obj = fileDataCommand;
+        mMessage.obj = nblog;
         mMessage.sendToTarget();
-
     }
 }

@@ -9,21 +9,29 @@ import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 
+import ktlab.lib.connection.commands.EraseFileCommand;
+import ktlab.lib.connection.commands.GetFileCommand;
+import ktlab.lib.connection.commands.GetNumberOfFileCommand;
+import ktlab.lib.connection.commands.GetUserParCommand;
+
 public abstract class Connection extends Handler {
 
     private static final String TAG = "Connection";
 
-    public enum  CONNECTION_STATE {
-        IDLE,
-        WAITING_ANSWER,
+    public enum CONNECTION_STATE {
+        REQUEST_STARTED,
+        REQUEST_FINISHED,
     }
 
     // Event
-    public static final int EVENT_CONNECT_COMPLETE      = 1;
-    public static final int EVENT_DATA_RECEIVED         = 2;
-    public static final int EVENT_DATA_SEND_COMPLETE    = 3;
-    public static final int EVENT_UNKNOWN_COMMAND       = 4;
-    public static final int EVENT_CONNECTION_FAIL       = 101;
+    public static final int EVENT_CONNECT_COMPLETE = 1;
+    public static final int EVENT_REQUEST_FINISHED = 2;
+    public static final int EVENT_REQUEST_STARTED= 3;
+    public static final int EVENT_DATA_SEND_COMPLETE = 4;
+    public static final int EVENT_UNKNOWN_COMMAND = 5;
+    public static final int EVENT_SEND_ACK = 6;
+    public static final int EVENT_RECEIVE_NACK = 7;
+    public static final int EVENT_CONNECTION_FAIL = 101;
 
     protected ConnectionCallback mCallback;
 
@@ -42,7 +50,7 @@ public abstract class Connection extends Handler {
 
     // send data queue
     protected ConnectionCommand mCurrentCommand;
-    protected CONNECTION_STATE mState = CONNECTION_STATE.IDLE;
+    protected CONNECTION_STATE mState = CONNECTION_STATE.REQUEST_FINISHED;
     protected final boolean canQueueing;
     protected LinkedList<PendingData> mQueue = null;
     private final ByteOrder mOrder;
@@ -56,69 +64,88 @@ public abstract class Connection extends Handler {
         }
 
         switch (msg.what) {
-        case EVENT_CONNECT_COMPLETE:
-            Log.i(TAG, "connect complete");
-            mInput = mConnectionThread.getInputStream();
-            mOutput = mConnectionThread.getOutputStream();
-            mCallback.onConnectComplete();
-
-            // receive thread starting
-            mReceiveThread = new CommandReceiveThread(mInput, obtainMessage(EVENT_DATA_RECEIVED),
-                    mOrder);
-            mReceiveThread.start();
-            break;
-
-        case EVENT_DATA_RECEIVED:
-            ConnectionCommand cmd = (ConnectionCommand) msg.obj;
-            mCallback.onCommandReceived(mCurrentCommand.id, cmd);
-
-            // receive thread starting
-            mReceiveThread = null;
-            mReceiveThread = new CommandReceiveThread(mInput, obtainMessage(EVENT_DATA_RECEIVED),
-                    mOrder);
-            mReceiveThread.start();
-            break;
-        case EVENT_UNKNOWN_COMMAND:
-            //TODO sen error message when receive nack
-            break;
-        case EVENT_DATA_SEND_COMPLETE:
-            int id = msg.arg1;
-//            Log.i(TAG, "data send complete, id : " + id);
-            mSendThread = null;
-            isSending = false;
-            mCallback.onDataSendComplete(id);
-
-            ConnectionCommand command = (ConnectionCommand) msg.obj;
-
-            if(isLastAllowed(command.type)) {
-                mState = CONNECTION_STATE.IDLE;
-            }
-
-            // if queueing data exists, send first data
-            if (mState == CONNECTION_STATE.IDLE) {
+            case EVENT_CONNECT_COMPLETE:
+                Log.i(TAG, "connect complete");
+                mInput = mConnectionThread.getInputStream();
+                mOutput = mConnectionThread.getOutputStream();
+                mCallback.onConnectComplete();
+                break;
+            case EVENT_REQUEST_STARTED :
+                final ConnectionCommand command = (ConnectionCommand) msg.obj;
+                mReceiveThread = getReceiveThread(command.type);
+                if(mReceiveThread != null)
+                    mReceiveThread.start();
+                else {
+                    mState = CONNECTION_STATE.REQUEST_FINISHED;
+                    sendPendingData();
+                }
+                break;
+            case EVENT_RECEIVE_NACK:
+                Log.v(TAG, "NO ACK RECEIVED");
+                mState = CONNECTION_STATE.REQUEST_FINISHED;
                 sendPendingData();
-            }
-            break;
+                break;
+            case EVENT_SEND_ACK:
+                ConnectionCommand commandSendAck = (ConnectionCommand) msg.obj;
+                this.sendDataInternal(commandSendAck.type, getAckData(true), mCurrentCommand.id);
+                break;
+            case EVENT_REQUEST_FINISHED:
+                ConnectionCommand cmd = (ConnectionCommand) msg.obj;
+                if(cmd == null)
+                    cmd = mCurrentCommand;
+                Log.v(TAG, "Request finished: " + mCurrentCommand.id);
+                mCallback.onCommandReceived(mCurrentCommand.id, cmd);
+                mReceiveThread = null;
+                mState = CONNECTION_STATE.REQUEST_FINISHED;
+                sendPendingData();
+                break;
+            case EVENT_DATA_SEND_COMPLETE:
+                int id = msg.arg1;
+                mSendThread = null;
+                isSending = false;
+                mCallback.onDataSendComplete(id);
+                break;
+            case EVENT_CONNECTION_FAIL:
+                Log.e(TAG, "connection failed");
+                mSendThread = null;
+                isSending = false;
+                mCallback.onConnectionFailed();
+                break;
 
-        case EVENT_CONNECTION_FAIL:
-            Log.e(TAG, "connection failed");
-            mSendThread = null;
-            isSending = false;
-            mCallback.onConnectionFailed();
-            break;
-
-        default:
-            Log.e(TAG, "Unknown Event");
+            default:
+                Log.e(TAG, "Unknown Event");
         }
+    }
+
+    private CommandReceiveThread getReceiveThread(final byte type) {
+        if(type == 0) {
+            return new GetNumberOfFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
+                    obtainMessage(EVENT_SEND_ACK), mOrder);
+        } else if(type == 8) {
+            return new GetUserParCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
+                    obtainMessage(EVENT_SEND_ACK), mOrder);
+        } else if(type == 6) {
+            return new EraseFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
+                    obtainMessage(EVENT_SEND_ACK), mOrder);
+        } else if(type == 7) {
+            return new GetFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
+                    obtainMessage(EVENT_SEND_ACK), mOrder);
+        }
+        return null;
+    }
+
+    private byte[] getAckData(boolean acknowleged) {
+        final byte[] acked = {0x01};
+        if (!acknowleged)
+            acked[0] = 0x00;
+        return acked;
     }
 
     /**
      * Constructor
      *
-     * @param cb
-     *            callback for communication result
-     * @param canQueueing
-     *            true if can queue sending data
+     * @param cb          callback for communication result
+     * @param canQueueing true if can queue sending data
      */
     protected Connection(ConnectionCallback cb, boolean canQueueing) {
         this(cb, canQueueing, ByteOrder.nativeOrder());
@@ -127,12 +154,9 @@ public abstract class Connection extends Handler {
     /**
      * Constructor
      *
-     * @param cb
-     *            callback for communication result
-     * @param canQueueing
-     *            true if can queue sending data
-     * @param order
-     *            byte order of the destination
+     * @param cb          callback for communication result
+     * @param canQueueing true if can queue sending data
+     * @param order       byte order of the destination
      */
     protected Connection(ConnectionCallback cb, boolean canQueueing, ByteOrder order) {
         mCallback = cb;
@@ -170,68 +194,45 @@ public abstract class Connection extends Handler {
         mOutput = null;
     }
 
-    private boolean isAllowed(final byte type) {
-        byte[] allowed = null;
-        if(mCurrentCommand != null)
-            allowed = mCurrentCommand.allowed;
-        if(allowed == null || allowed.length == 0)
-            return false;
-        for(int i = 0; i < allowed.length; i++) {
-            if(allowed[i] == type) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isLastAllowed(final byte type) {
-        byte[] allowed = null;
-        if(mCurrentCommand != null)
-            allowed = mCurrentCommand.allowed;
-        if(allowed == null || allowed.length == 0)
-            return true;
-        if(allowed[allowed.length - 1] == type) {
-            return true;
-        }
-        return false;
-    }
-
     /**
-     *
-     * @param type
-     *            command type
-     * @param data
-     *            option data
-     * @param id
-     *            send id
+     * @param type command type
+     * @param data option data
+     * @param id   send id
      * @return return true if success sending or queueing data. if "canQueueing"
-     *         is false and sending any data, return false.
+     * is false and sending any data, return false.
      */
-    public boolean sendData(byte type, byte[] data, int id, byte[] allowed) {
+    public boolean sendData(byte type, byte[] data, int id) {
 
-        // if sending data, queueing...
-        if (mState == CONNECTION_STATE.WAITING_ANSWER && !isAllowed(type)) {
-            if (canQueueing) {
-                synchronized (mQueue) {
-                    PendingData p = new PendingData(id, new ConnectionCommand(type, data, allowed, id));
-                    mQueue.offer(p);
-                }
-                Log.i(TAG, "sendData(), pending...");
-                return true;
-            } else {
-                return false;
+        if (mState == CONNECTION_STATE.REQUEST_STARTED) {
+            synchronized (mQueue) {
+                PendingData p = new PendingData(id, new ConnectionCommand(type, data, id));
+                mQueue.offer(p);
             }
+            Log.i(TAG, "Request type " + type + " , pending...");
+            return true;
+
         }
+
+        Message msg = obtainMessage(EVENT_REQUEST_STARTED);
+        msg.arg1 = id;
+        ConnectionCommand command = new ConnectionCommand(type, data, id);
+        msg.obj = command;
+
+        mCurrentCommand = command;
+        mState = CONNECTION_STATE.REQUEST_STARTED;
+
+        mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
+        mSendThread.start();
+        isSending = true;
+        return true;
+    }
+
+    private boolean sendDataInternal(byte type, byte[] data, int id) {
 
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = id;
-        ConnectionCommand command = new ConnectionCommand(type, data, allowed, id);
+        ConnectionCommand command = new ConnectionCommand(type, data, id);
         msg.obj = command;
-
-        if(mState == CONNECTION_STATE.IDLE) {
-            mCurrentCommand = command;
-            mState = CONNECTION_STATE.WAITING_ANSWER;
-        }
 
         mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
         mSendThread.start();
@@ -240,13 +241,10 @@ public abstract class Connection extends Handler {
     }
 
     /**
-     *
-     * @param type
-     *            command type
-     * @param id
-     *            send id
+     * @param type command type
+     * @param id   send id
      * @return return true if success sending or queueing data. if "canQueueing"
-     *         is false and sending any data, return false.
+     * is false and sending any data, return false.
      */
     public boolean sendData(byte type, int id) {
 
@@ -264,7 +262,7 @@ public abstract class Connection extends Handler {
             }
         }
 
-        Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
+        Message msg = obtainMessage(EVENT_REQUEST_STARTED);
         msg.arg1 = id;
         ConnectionCommand command = new ConnectionCommand(type);
         mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
@@ -277,21 +275,19 @@ public abstract class Connection extends Handler {
     /**
      * send data internal.
      *
-     * @param pendingData
-     *            pending data
+     * @param pendingData pending data
      * @return always true
      * @hide
      */
     private boolean sendData(PendingData pendingData) {
 
         Log.i(TAG, "send PendingData");
-        Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
+        Message msg = obtainMessage(EVENT_REQUEST_STARTED);
         msg.arg1 = pendingData.id;
         msg.obj = pendingData.command;
 
-
         mCurrentCommand = pendingData.command;
-        mState = CONNECTION_STATE.WAITING_ANSWER;
+        mState = CONNECTION_STATE.REQUEST_STARTED;
 
         mSendThread = new CommandSendThread(mOutput, pendingData.command, msg, mOrder);
         mSendThread.start();

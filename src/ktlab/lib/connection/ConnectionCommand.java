@@ -20,7 +20,6 @@ public class ConnectionCommand {
     public byte type;
     public int optionLen;
     public byte[] option;
-    public byte[] allowed;
     public int id;
 
     /**
@@ -29,7 +28,7 @@ public class ConnectionCommand {
      * @param type Commands type
      */
     public ConnectionCommand(byte type) {
-        this(type, null, new byte[0]);
+        this(type, null);
     }
 
     /**
@@ -38,14 +37,13 @@ public class ConnectionCommand {
      * @param type   Commands type
      * @param option Commands option
      */
-    public ConnectionCommand(byte type, byte[] option, byte[] allow) {
-        this(type, option, allow, -1);
+    public ConnectionCommand(byte type, byte[] option) {
+        this(type, option, -1);
     }
 
-    public ConnectionCommand(byte type, byte[] option, byte[] allow, int commandId) {
+    public ConnectionCommand(byte type, byte[] option, int commandId) {
         this.type = type;
         this.id = commandId;
-        this.allowed = allow;
         if (option != null) {
             optionLen = option.length;
             this.option = new byte[option.length];
@@ -128,7 +126,7 @@ public class ConnectionCommand {
         byte[] option = new byte[len];
         bf.get(option);
 
-        return new ConnectionCommand(type, option, null);
+        return new ConnectionCommand(type, option);
     }
 
     /**
@@ -148,7 +146,7 @@ public class ConnectionCommand {
 
         ByteBuffer bf = ByteBuffer.wrap(header).order(order);
         byte type = bf.get(ConnectionCommand.HEADER_COMMAND_INDEX);
-        return new ConnectionCommand(type, option, null);
+        return new ConnectionCommand(type, option);
 //        return fromByteArray(data, order);
     }
 }
