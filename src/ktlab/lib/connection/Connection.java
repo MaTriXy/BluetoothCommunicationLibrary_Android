@@ -289,10 +289,12 @@ public abstract class Connection extends Handler {
      */
     private boolean sendData(PendingData pendingData) {
 
-        Log.i(TAG, "send PendingData");
+
         Message msg = obtainMessage(EVENT_REQUEST_STARTED);
         msg.arg1 = pendingData.id;
         msg.obj = pendingData.command;
+
+        Log.i(TAG, "SEND PendingData, id " + pendingData.command.type);
 
         mCurrentCommand = pendingData.command;
         mState = CONNECTION_STATE.REQUEST_STARTED;

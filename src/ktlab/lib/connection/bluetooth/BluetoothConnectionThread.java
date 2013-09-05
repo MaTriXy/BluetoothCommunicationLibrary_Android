@@ -26,7 +26,7 @@ public abstract class BluetoothConnectionThread extends ConnectionThread {
 
         getSocket();
 
-        if (mSocket == null) {
+        if (mSocket == null || !mSocket.isConnected()) {
             Log.e(TAG, "Failed to connect");
             mMessage.what = BluetoothConnection.EVENT_CONNECTION_FAIL;
             mMessage.sendToTarget();
