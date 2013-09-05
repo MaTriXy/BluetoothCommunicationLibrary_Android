@@ -13,6 +13,8 @@ import ktlab.lib.connection.commands.EraseFileCommand;
 import ktlab.lib.connection.commands.GetFileCommand;
 import ktlab.lib.connection.commands.GetNumberOfFileCommand;
 import ktlab.lib.connection.commands.GetUserParCommand;
+import ktlab.lib.connection.commands.PowerDownCommand;
+import ktlab.lib.connection.commands.SetTimeCommand;
 
 public abstract class Connection extends Handler {
 
@@ -129,6 +131,12 @@ public abstract class Connection extends Handler {
                     obtainMessage(EVENT_SEND_ACK), mOrder);
         } else if(type == 7) {
             return new GetFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
+                    obtainMessage(EVENT_SEND_ACK), mOrder);
+        } else if(type == 9) {
+            return new SetTimeCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
+                    obtainMessage(EVENT_SEND_ACK), mOrder);
+        } else if(type == 11) {
+            return new PowerDownCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
                     obtainMessage(EVENT_SEND_ACK), mOrder);
         }
         return null;
