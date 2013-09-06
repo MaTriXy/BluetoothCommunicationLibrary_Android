@@ -14,8 +14,8 @@ import ktlab.lib.connection.CommandReceiveThread;
 public class PowerDownCommand extends CommandReceiveThread {
 
     private Handler handler;
-    public PowerDownCommand(InputStream in, Message msg, Message msgSend, ByteOrder order) {
-        super(in, msg, msgSend, order);
+    public PowerDownCommand(InputStream in, Message msg, ByteOrder order) {
+        super(in, msg, order);
         handler = mMessage.getTarget();
     }
 

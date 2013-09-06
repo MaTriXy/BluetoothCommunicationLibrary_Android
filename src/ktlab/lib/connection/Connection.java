@@ -15,6 +15,7 @@ import ktlab.lib.connection.commands.GetNumberOfFileCommand;
 import ktlab.lib.connection.commands.GetUserParCommand;
 import ktlab.lib.connection.commands.PowerDownCommand;
 import ktlab.lib.connection.commands.SetTimeCommand;
+import ktlab.lib.connection.commands.StartSendFileCommand;
 
 public abstract class Connection extends Handler {
 
@@ -28,7 +29,7 @@ public abstract class Connection extends Handler {
     // Event
     public static final int EVENT_CONNECT_COMPLETE = 1;
     public static final int EVENT_REQUEST_FINISHED = 2;
-    public static final int EVENT_REQUEST_STARTED= 3;
+    public static final int EVENT_REQUEST_STARTED = 3;
     public static final int EVENT_DATA_SEND_COMPLETE = 4;
     public static final int EVENT_UNKNOWN_COMMAND = 5;
     public static final int EVENT_SEND_ACK = 6;
@@ -55,6 +56,7 @@ public abstract class Connection extends Handler {
     protected CONNECTION_STATE mState = CONNECTION_STATE.REQUEST_FINISHED;
     protected final boolean canQueueing;
     protected LinkedList<PendingData> mQueue = null;
+    protected LinkedList<PendingData> mInnerSendQueue = null;
     private final ByteOrder mOrder;
 
     @Override
@@ -72,10 +74,10 @@ public abstract class Connection extends Handler {
                 mOutput = mConnectionThread.getOutputStream();
                 mCallback.onConnectComplete();
                 break;
-            case EVENT_REQUEST_STARTED :
+            case EVENT_REQUEST_STARTED:
                 final ConnectionCommand command = (ConnectionCommand) msg.obj;
                 mReceiveThread = getReceiveThread(command.type);
-                if(mReceiveThread != null)
+                if (mReceiveThread != null)
                     mReceiveThread.start();
                 else {
                     mState = CONNECTION_STATE.REQUEST_FINISHED;
@@ -93,7 +95,7 @@ public abstract class Connection extends Handler {
                 break;
             case EVENT_REQUEST_FINISHED:
                 ConnectionCommand cmd = (ConnectionCommand) msg.obj;
-                if(cmd == null)
+                if (cmd == null)
                     cmd = mCurrentCommand;
                 Log.v(TAG, "Request finished: " + mCurrentCommand.id);
                 mCallback.onCommandReceived(mCurrentCommand.id, cmd);
@@ -106,6 +108,7 @@ public abstract class Connection extends Handler {
                 mSendThread = null;
                 isSending = false;
                 mCallback.onDataSendComplete(id);
+                sendPendingDataInternal();
                 break;
             case EVENT_CONNECTION_FAIL:
                 Log.e(TAG, "connection failed");
@@ -120,24 +123,20 @@ public abstract class Connection extends Handler {
     }
 
     private CommandReceiveThread getReceiveThread(final byte type) {
-        if(type == 0) {
-            return new GetNumberOfFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
-                    obtainMessage(EVENT_SEND_ACK), mOrder);
-        } else if(type == 8) {
-            return new GetUserParCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
-                    obtainMessage(EVENT_SEND_ACK), mOrder);
-        } else if(type == 6) {
-            return new EraseFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
-                    obtainMessage(EVENT_SEND_ACK), mOrder);
-        } else if(type == 7) {
-            return new GetFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
-                    obtainMessage(EVENT_SEND_ACK), mOrder);
-        } else if(type == 9) {
-            return new SetTimeCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
-                    obtainMessage(EVENT_SEND_ACK), mOrder);
-        } else if(type == 11) {
-            return new PowerDownCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED),
-                    obtainMessage(EVENT_SEND_ACK), mOrder);
+        if (type == 0) {
+            return new GetNumberOfFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
+        } else if (type == 8) {
+            return new GetUserParCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
+        } else if (type == 6) {
+            return new EraseFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
+        } else if (type == 7) {
+            return new GetFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
+        } else if (type == 9) {
+            return new SetTimeCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
+        } else if (type == 11) {
+            return new PowerDownCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
+        } else if (type == 4) {
+            return new StartSendFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
         }
         return null;
     }
@@ -173,7 +172,7 @@ public abstract class Connection extends Handler {
         if (canQueueing) {
             mQueue = new LinkedList<PendingData>();
         }
-
+        mInnerSendQueue = new LinkedList<PendingData>();
         mOrder = order;
     }
 
@@ -231,11 +230,17 @@ public abstract class Connection extends Handler {
 
         mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
         mSendThread.start();
-        isSending = true;
         return true;
     }
 
     private boolean sendDataInternal(byte type, byte[] data, int id) {
+        if (isSending) {
+            synchronized (mInnerSendQueue) {
+                PendingData p = new PendingData(id, new ConnectionCommand(type));
+                mInnerSendQueue.offer(p);
+            }
+            return true;
+        }
 
         Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
         msg.arg1 = id;
@@ -243,6 +248,18 @@ public abstract class Connection extends Handler {
         msg.obj = command;
 
         mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
+        mSendThread.start();
+        isSending = true;
+        return true;
+    }
+
+    private boolean sendDataInternal(PendingData pendingData) {
+
+        Message msg = obtainMessage(EVENT_DATA_SEND_COMPLETE);
+        msg.arg1 = pendingData.id;
+        msg.obj = pendingData.command;
+
+        mSendThread = new CommandSendThread(mOutput, pendingData.command, msg, mOrder);
         mSendThread.start();
         isSending = true;
         return true;
@@ -323,6 +340,18 @@ public abstract class Connection extends Handler {
         }
     }
 
+    private void sendPendingDataInternal() {
+        PendingData pendingData = null;
+        synchronized (mInnerSendQueue) {
+            if (mInnerSendQueue.size() > 0) {
+                pendingData = mQueue.poll();
+            }
+        }
+        if (pendingData != null) {
+            sendDataInternal(pendingData);
+        }
+    }
+
     /**
      * clear queue data
      *
@@ -333,6 +362,10 @@ public abstract class Connection extends Handler {
             synchronized (mQueue) {
                 mQueue.clear();
             }
+        }
+
+        synchronized (mInnerSendQueue) {
+            mInnerSendQueue.clear();
         }
     }
 

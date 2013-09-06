@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
+import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 
@@ -17,12 +18,13 @@ public class CommandReceiveThread extends Thread {
     protected Message mMessage;
     protected Message mMessageSend;
     protected ByteOrder mOrder;
+    protected Handler mHandler;
 
-    public CommandReceiveThread(InputStream in, Message msg, Message msgSend, ByteOrder order) {
+    public CommandReceiveThread(InputStream in, Message msg, ByteOrder order) {
         mInput = in;
         mMessage = msg;
-        mMessageSend = msgSend;
         mOrder = order;
+        mHandler = mMessage.getTarget();
     }
 
     protected boolean readAck() {
@@ -163,7 +165,76 @@ public class CommandReceiveThread extends Thread {
     }
 
 
-    public void run() {}
+    public void run() {
+    }
+
+    protected ConnectionCommand receiveFile() {
+        // start_send_file_command
+        final ConnectionCommand startSendFileCommand = readCommand();
+        if (startSendFileCommand == null) {
+            this.forceStop = true;
+            return null;
+        }
+
+        sendAck(startSendFileCommand);
+
+
+        int fileSize = getFileSize(startSendFileCommand.option);
+        Log.v(LOG_TAG, "start send file, option " + ConnectionCommand.getPrintableBytesArray(startSendFileCommand.option));
+        Log.v(LOG_TAG, "start send file, size " + fileSize);
+        int receiveSize = 0;
+
+        ConnectionCommand resultCommand = null;
+
+        while (receiveSize < fileSize) {
+
+            // file_data
+            final ConnectionCommand fileDataCommand = readCommand();
+            if (fileDataCommand == null) {
+                this.forceStop = true;
+                return null;
+            }
+
+            sendAck(fileDataCommand);
+            if(resultCommand == null) {
+                resultCommand = new ConnectionCommand(fileDataCommand.type, fileDataCommand.option);
+            } else {
+                resultCommand.option = concatByteArray(resultCommand.option, fileDataCommand.option);
+            }
+
+            receiveSize += fileDataCommand.optionLen;
+        }
+
+        return resultCommand;
+    }
+
+    private int getFileSize(final byte[] data) {
+        if (data == null || data.length < 16)
+            return 0;
+        ByteBuffer bf = ByteBuffer.wrap(data).order(mOrder);
+        return bf.getInt(12);
+    }
+
+
+    protected void sendAck(final ConnectionCommand command) {
+        if (command == null)
+            return;
+        final Message msg = Message.obtain();
+        msg.setTarget(mHandler);
+        msg.obj = command;
+        msg.what = Connection.EVENT_SEND_ACK;
+        msg.sendToTarget();
+    }
+
+    protected byte[] concatByteArray(final byte[] a, final byte[] b) {
+        if (a == null || b == null)
+            return a == null ? b : a;
+
+        byte[] c = new byte[a.length + b.length];
+        System.arraycopy(a, 0, c, 0, a.length);
+        System.arraycopy(b, 0, c, a.length, b.length);
+        return c;
+    }
 
     protected boolean checkHeader(final byte[] data, final int len) {
         final byte[] header = ConnectionCommand.getHeader();

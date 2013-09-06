@@ -15,10 +15,8 @@ import ktlab.lib.connection.ConnectionCommand;
  */
 public class GetNumberOfFileCommand extends CommandReceiveThread {
 
-    private Handler handler;
-    public GetNumberOfFileCommand(InputStream in, Message msg, Message msgSend, ByteOrder order) {
-        super(in, msg, msgSend, order);
-        handler = mMessage.getTarget();
+    public GetNumberOfFileCommand(InputStream in, Message msg, ByteOrder order) {
+        super(in, msg, order);
     }
 
     @Override
@@ -37,9 +35,7 @@ public class GetNumberOfFileCommand extends CommandReceiveThread {
             return;
         }
 
-        // send start_send_file ack
-        mMessageSend.obj = nblog;
-        mMessageSend.sendToTarget();
+        sendAck(nblog);
 
         mMessage.obj = nblog;
         mMessage.sendToTarget();

@@ -16,8 +16,9 @@ import ktlab.lib.connection.ConnectionCommand;
 public class GetUserParCommand extends CommandReceiveThread {
 
     private Handler handler;
-    public GetUserParCommand(InputStream in, Message msg, Message msgSend, ByteOrder order) {
-        super(in, msg, msgSend, order);
+
+    public GetUserParCommand(InputStream in, Message msg, ByteOrder order) {
+        super(in, msg, order);
         handler = mMessage.getTarget();
     }
 
@@ -25,41 +26,18 @@ public class GetUserParCommand extends CommandReceiveThread {
     public void run() {
 
         //read get_user_par ACK
-        if(!readAck()) {
+        if (!readAck()) {
             this.forceStop = true;
             return;
         }
 
-        // start_send_file_command
-        final ConnectionCommand startSendFileCommand = readCommand();
-        if(startSendFileCommand == null) {
+        final ConnectionCommand fileDataCommand = receiveFile();
+        if (fileDataCommand == null) {
             this.forceStop = true;
             return;
         }
-
-        // send start_send_file ack
-        mMessageSend.obj = startSendFileCommand;
-        mMessageSend.sendToTarget();
-
-        // file_data
-        final ConnectionCommand fileDataCommand = readCommand();
-        if(fileDataCommand == null) {
-            this.forceStop = true;
-            return;
-        }
-
-        // send file_data ack
-//        mMessageSend.obj = fileDataCommand;
-//        mMessageSend.sendToTarget();
-
-        Message msg = Message.obtain();
-        msg.setTarget(handler);
-        msg.obj = fileDataCommand;
-        msg.what = Connection.EVENT_SEND_ACK;
-        msg.sendToTarget();
 
         mMessage.obj = fileDataCommand;
         mMessage.sendToTarget();
-
     }
 }

@@ -16,8 +16,8 @@ import ktlab.lib.connection.ConnectionCommand;
 public class EraseFileCommand extends CommandReceiveThread {
 
     private Handler handler;
-    public EraseFileCommand(InputStream in, Message msg, Message msgSend, ByteOrder order) {
-        super(in, msg, msgSend, order);
+    public EraseFileCommand(InputStream in, Message msg, ByteOrder order) {
+        super(in, msg, order);
         handler = mMessage.getTarget();
     }
 
