@@ -10,10 +10,12 @@ import android.os.Message;
 import android.util.Log;
 
 import ktlab.lib.connection.commands.EraseFileCommand;
+import ktlab.lib.connection.commands.FileDataCommand;
 import ktlab.lib.connection.commands.GetFileCommand;
 import ktlab.lib.connection.commands.GetNumberOfFileCommand;
 import ktlab.lib.connection.commands.GetUserParCommand;
 import ktlab.lib.connection.commands.PowerDownCommand;
+import ktlab.lib.connection.commands.ResetCommand;
 import ktlab.lib.connection.commands.SetTimeCommand;
 import ktlab.lib.connection.commands.StartSendFileCommand;
 
@@ -137,6 +139,10 @@ public abstract class Connection extends Handler {
             return new PowerDownCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
         } else if (type == 4) {
             return new StartSendFileCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
+        } else if (type == 5) {
+            return new FileDataCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
+        } else if (type == 10) {
+            return new ResetCommand(mInput, obtainMessage(EVENT_REQUEST_FINISHED), mOrder);
         }
         return null;
     }

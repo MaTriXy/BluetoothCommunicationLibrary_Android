@@ -27,13 +27,7 @@ public class FileDataCommand extends CommandReceiveThread {
             return;
         }
 
-        final ConnectionCommand fileDataCommand = receiveFile();
-        if (fileDataCommand == null) {
-            this.forceStop = true;
-            return;
-        }
-
-        mMessage.obj = fileDataCommand;
+        mMessage.obj = null;
         mMessage.sendToTarget();
     }
 }
