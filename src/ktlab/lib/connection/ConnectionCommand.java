@@ -82,12 +82,13 @@ public class ConnectionCommand {
         return stringToBytesASCII(BABOLAT_HEADER);
     }
 
-    public static String getPrintableBytesArray(final byte[] data) {
+    public static String getPrintableBytesArray(final byte[] data, int length) {
         if (data == null || data.length == 0)
             return "[empty]";
+        length = length < 0 ? 0 :length;
 
         final StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < data.length; i++) {
+        for (int i = 0; i < length && i < data.length; i++) {
             if (i == 0) {
                 builder.append('[');
                 builder.append(data[i]);
@@ -100,6 +101,13 @@ public class ConnectionCommand {
             }
         }
         return builder.toString();
+    }
+
+    public static String getPrintableBytesArray(final byte[] data) {
+        if (data == null || data.length == 0)
+            return "[empty]";
+
+        return getPrintableBytesArray(data, data.length);
     }
 
 
