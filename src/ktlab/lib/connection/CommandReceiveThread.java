@@ -136,6 +136,9 @@ public class CommandReceiveThread extends Thread {
 
         final int optionLen = orderedHeader[ConnectionCommand.HEADER_DATA_SIZE_INDEX];
 
+        if(optionLen < 0)
+            return null;
+
         byte[] rawOption = new byte[optionLen];
         receivedSize = 0;
 
