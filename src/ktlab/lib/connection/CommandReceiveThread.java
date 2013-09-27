@@ -132,12 +132,13 @@ public class CommandReceiveThread extends Thread {
         }
 
         byte[] orderedHeader = new byte[rawHeader.length];
+        Log.v("brako", "rawheader" + ConnectionCommand.getPrintableBytesArray(rawHeader));
         ByteBuffer.wrap(rawHeader).order(mOrder).get(orderedHeader);
 
-        final int optionLen = orderedHeader[ConnectionCommand.HEADER_DATA_SIZE_INDEX];
+        int optionLen = orderedHeader[ConnectionCommand.HEADER_DATA_SIZE_INDEX];
 
-        if(optionLen < 0)
-            return null;
+        if (optionLen < 0)
+            optionLen += 256;
 
         byte[] rawOption = new byte[optionLen];
         receivedSize = 0;
@@ -175,6 +176,7 @@ public class CommandReceiveThread extends Thread {
         // start_send_file_command
         final ConnectionCommand startSendFileCommand = readCommand();
         if (startSendFileCommand == null) {
+            Log.v(LOG_TAG, "startSendFileCommand EMPTY COMMAND ");
             this.forceStop = true;
             return null;
         }
@@ -190,16 +192,17 @@ public class CommandReceiveThread extends Thread {
         ConnectionCommand resultCommand = null;
 
         while (receiveSize < fileSize) {
-
+            Log.v("brako", "readCommand");
             // file_data
             final ConnectionCommand fileDataCommand = readCommand();
             if (fileDataCommand == null) {
+                Log.v("brako", "empty command");
                 this.forceStop = true;
                 return null;
             }
 
             sendAck(fileDataCommand);
-            if(resultCommand == null) {
+            if (resultCommand == null) {
                 resultCommand = new ConnectionCommand(fileDataCommand.type, fileDataCommand.option);
             } else {
                 resultCommand.option = concatByteArray(resultCommand.option, fileDataCommand.option);
