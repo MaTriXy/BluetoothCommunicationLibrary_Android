@@ -40,6 +40,6 @@ public class ClientBluetoothConnectionThread extends BluetoothConnectionThread {
                 // DO NOTHING
             }
             // retry
-        } while (count++ < 5);
+        } while (count++ < 1);
     }
 }
