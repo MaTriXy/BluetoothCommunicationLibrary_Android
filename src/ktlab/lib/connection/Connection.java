@@ -103,12 +103,15 @@ public abstract class Connection extends Handler {
                 mCallback.onCommandReceived(mCurrentCommand.id, cmd);
                 mReceiveThread = null;
                 mState = CONNECTION_STATE.REQUEST_FINISHED;
+                isSending = false;
+                Log.v("IS_SENDING", "EVENT_REQUEST_FINISHED false");
                 sendPendingData();
                 break;
             case EVENT_DATA_SEND_COMPLETE:
                 int id = msg.arg1;
                 mSendThread = null;
                 isSending = false;
+                Log.v("IS_SENDING", "EVENT_DATA_SEND_COMPLETE false");
                 mCallback.onDataSendComplete(id);
                 sendPendingDataInternal();
                 break;
@@ -116,6 +119,7 @@ public abstract class Connection extends Handler {
                 Log.e(TAG, "connection failed");
                 mSendThread = null;
                 isSending = false;
+                Log.v("IS_SENDING", "EVENT_CONNECTION_FAIL false");
                 mCallback.onConnectionFailed();
                 break;
 
@@ -233,7 +237,6 @@ public abstract class Connection extends Handler {
 
         mCurrentCommand = command;
         mState = CONNECTION_STATE.REQUEST_STARTED;
-
         mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
         mSendThread.start();
         return true;
@@ -256,6 +259,7 @@ public abstract class Connection extends Handler {
         mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
         mSendThread.start();
         isSending = true;
+        Log.v("IS_SENDING", "sendDataInternal(byte type, byte[] data, int id) true");
         return true;
     }
 
@@ -280,7 +284,7 @@ public abstract class Connection extends Handler {
     public boolean sendData(byte type, int id) {
 
         // if sending data, queueing...
-        if (isSending) {
+        if (mState == CONNECTION_STATE.REQUEST_STARTED) {
             if (canQueueing) {
                 synchronized (mQueue) {
                     PendingData p = new PendingData(id, new ConnectionCommand(type));
@@ -298,7 +302,7 @@ public abstract class Connection extends Handler {
         ConnectionCommand command = new ConnectionCommand(type);
         mSendThread = new CommandSendThread(mOutput, command, msg, mOrder);
         mSendThread.start();
-
+        Log.v("IS_SENDING", "sendData(byte type, int id) true");
         isSending = true;
         return true;
     }
@@ -324,8 +328,6 @@ public abstract class Connection extends Handler {
 
         mSendThread = new CommandSendThread(mOutput, pendingData.command, msg, mOrder);
         mSendThread.start();
-
-        isSending = true;
         return true;
     }
 
