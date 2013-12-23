@@ -5,6 +5,7 @@ import java.io.OutputStream;
 import java.nio.ByteOrder;
 
 import android.os.Message;
+import android.util.Log;
 
 public class CommandSendThread extends Thread {
 
@@ -15,6 +16,7 @@ public class CommandSendThread extends Thread {
 
     public CommandSendThread(OutputStream out, ConnectionCommand command,
                              Message msg, ByteOrder order) {
+        Log.v("CommandSendThread", "creating command send thread with command " + command.type);
         mOut = out;
         mCommand = command;
         mMessage = msg;

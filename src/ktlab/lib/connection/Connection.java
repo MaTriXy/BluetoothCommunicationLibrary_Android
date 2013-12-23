@@ -71,52 +71,60 @@ public abstract class Connection extends Handler {
 
         switch (msg.what) {
             case EVENT_CONNECT_COMPLETE:
-                Log.i(TAG, "connect complete");
+                Log.v(TAG, "=EVENT_CONNECT_COMPLETE=");
                 mInput = mConnectionThread.getInputStream();
                 mOutput = mConnectionThread.getOutputStream();
                 mCallback.onConnectComplete();
                 break;
             case EVENT_REQUEST_STARTED:
+                Log.v(TAG, "=EVENT_REQUEST_STARTED=");
                 final ConnectionCommand command = (ConnectionCommand) msg.obj;
                 mReceiveThread = getReceiveThread(command.type);
-                if (mReceiveThread != null)
+                if (mReceiveThread != null) {
                     mReceiveThread.start();
-                else {
+                } else {
                     mState = CONNECTION_STATE.REQUEST_FINISHED;
                     sendPendingData();
                 }
                 break;
             case EVENT_RECEIVE_NACK:
-                Log.v(TAG, "NO ACK RECEIVED");
+                Log.v(TAG, "=EVENT_RECEIVE_NACK=");
                 mState = CONNECTION_STATE.REQUEST_FINISHED;
                 sendPendingData();
                 break;
             case EVENT_SEND_ACK:
+                Log.v(TAG, "=EVENT_SEND_ACK=");
                 ConnectionCommand commandSendAck = (ConnectionCommand) msg.obj;
                 this.sendDataInternal(commandSendAck.type, getAckData(true), mCurrentCommand.id);
                 break;
             case EVENT_REQUEST_FINISHED:
+                Log.v(TAG, "=EVENT_REQUEST_FINISHED=");
                 ConnectionCommand cmd = (ConnectionCommand) msg.obj;
+
                 if (cmd == null)
                     cmd = mCurrentCommand;
+
+                Log.v(TAG, "Request finished: received command " + cmd.id);
+
                 Log.v(TAG, "Request finished: " + mCurrentCommand.id);
                 mCallback.onCommandReceived(mCurrentCommand.id, cmd);
                 mReceiveThread = null;
                 mState = CONNECTION_STATE.REQUEST_FINISHED;
-                isSending = false;
-                Log.v("IS_SENDING", "EVENT_REQUEST_FINISHED false");
+//                isSending = false;
+                sendPendingDataInternal();
                 sendPendingData();
                 break;
             case EVENT_DATA_SEND_COMPLETE:
+                Log.v(TAG, "=EVENT_DATA_SEND_COMPLETE=");
                 int id = msg.arg1;
                 mSendThread = null;
                 isSending = false;
-                Log.v("IS_SENDING", "EVENT_DATA_SEND_COMPLETE false");
                 mCallback.onDataSendComplete(id);
                 sendPendingDataInternal();
+                sendPendingData();
                 break;
             case EVENT_CONNECTION_FAIL:
-                Log.e(TAG, "connection failed");
+                Log.v(TAG, "=EVENT_CONNECTION_FAIL=");
                 mSendThread = null;
                 isSending = false;
                 Log.v("IS_SENDING", "EVENT_CONNECTION_FAIL false");
@@ -220,7 +228,7 @@ public abstract class Connection extends Handler {
      */
     public boolean sendData(byte type, byte[] data, int id) {
 
-        if (mState == CONNECTION_STATE.REQUEST_STARTED) {
+        if (mState == CONNECTION_STATE.REQUEST_STARTED || isSending) {
             synchronized (mQueue) {
                 PendingData p = new PendingData(id, new ConnectionCommand(type, data, id));
                 mQueue.offer(p);
@@ -247,6 +255,7 @@ public abstract class Connection extends Handler {
             synchronized (mInnerSendQueue) {
                 PendingData p = new PendingData(id, new ConnectionCommand(type));
                 mInnerSendQueue.offer(p);
+                Log.i(TAG, "QUEUE PendingData internal, id " + p.command.type);
             }
             return true;
         }
@@ -269,6 +278,8 @@ public abstract class Connection extends Handler {
         msg.arg1 = pendingData.id;
         msg.obj = pendingData.command;
 
+        Log.i(TAG, "SEND PendingData internal, id " + pendingData.command.type);
+
         mSendThread = new CommandSendThread(mOutput, pendingData.command, msg, mOrder);
         mSendThread.start();
         isSending = true;
@@ -284,7 +295,7 @@ public abstract class Connection extends Handler {
     public boolean sendData(byte type, int id) {
 
         // if sending data, queueing...
-        if (mState == CONNECTION_STATE.REQUEST_STARTED) {
+        if (mState == CONNECTION_STATE.REQUEST_STARTED || isSending) {
             if (canQueueing) {
                 synchronized (mQueue) {
                     PendingData p = new PendingData(id, new ConnectionCommand(type));
@@ -338,9 +349,11 @@ public abstract class Connection extends Handler {
      */
     private void sendPendingData() {
         PendingData pendingData = null;
-        synchronized (mQueue) {
-            if (mQueue.size() > 0) {
-                pendingData = mQueue.poll();
+        if (!isSending && mState == CONNECTION_STATE.REQUEST_FINISHED) {
+            synchronized (mQueue) {
+                if (mQueue.size() > 0) {
+                    pendingData = mQueue.poll();
+                }
             }
         }
         if (pendingData != null) {
@@ -350,9 +363,11 @@ public abstract class Connection extends Handler {
 
     private void sendPendingDataInternal() {
         PendingData pendingData = null;
-        synchronized (mInnerSendQueue) {
-            if (mInnerSendQueue.size() > 0) {
-                pendingData = mQueue.poll();
+        if (!isSending) {
+            synchronized (mInnerSendQueue) {
+                if (mInnerSendQueue.size() > 0) {
+                    pendingData = mQueue.poll();
+                }
             }
         }
         if (pendingData != null) {

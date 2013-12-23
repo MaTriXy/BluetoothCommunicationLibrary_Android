@@ -1,6 +1,7 @@
 package ktlab.lib.connection.commands;
 
 import android.os.Message;
+import android.util.Log;
 
 import java.io.InputStream;
 import java.nio.ByteOrder;
@@ -21,6 +22,8 @@ public class GetFileCommand extends CommandReceiveThread {
     @Override
     public void run() {
 
+
+
         //read get_user_par ACK
         if (!readAck()) {
             this.forceStop = true;
@@ -32,7 +35,7 @@ public class GetFileCommand extends CommandReceiveThread {
             this.forceStop = true;
             return;
         }
-
+        Log.v(LOG_TAG, "GET FILE FINISHED");
         mMessage.obj = fileDataCommand;
         mMessage.sendToTarget();
     }
